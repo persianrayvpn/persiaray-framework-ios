@@ -1,0 +1,4 @@
+module PersianRayGo {
+  umbrella header "libawgxray.h"
+  export *
+}

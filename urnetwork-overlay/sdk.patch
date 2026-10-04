@@ -1,0 +1,19 @@
+diff --git a/sdk.go b/sdk.go
+index f18dcbe..2a388ee 100644
+--- a/sdk.go
++++ b/sdk.go
+@@ -594,6 +594,14 @@ func SetEgressInterfaceIndex(index4 int, index6 int) {
+ 	connect.SetEgressInterfaceIndex(uint32(index4), uint32(index6))
+ }
+ 
++// SetUpstreamSocks sends platform and provider dials through a SOCKS5 proxy.
++// Empty clears it. Loopback dials stay direct. Set this before the device
++// is created. Pass 0 to SetEgressInterfaceIndex while this is set, or the
++// interface pin skips the proxy.
++func SetUpstreamSocks(addr string) {
++	connect.SetUpstreamSocks(addr)
++}
++
+ // FreeMemory drops recoverable memory in response to host memory pressure
+ func FreeMemory() {
+ 	startTime := time.Now()

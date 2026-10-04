@@ -1,0 +1,122 @@
+# One Go runtime containing AWG + Xray + Psiphon + USQUE.
+name: awg-xray-apple
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: awg-xray-apple
+  cancel-in-progress: true
+
+jobs:
+  apple:
+    runs-on: macos-15
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      CGO_ENABLED: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Validate repository-root layout
+        run: |
+          set -euo pipefail
+          test -f go.mod
+          test -f psiphon_bridge.go
+          test -f awg-ios/cmd/persianray/export.go
+          test -f xray-core/go.mod
+          test -f libxray/go.mod
+          test -f psiphon-ios/MobileLibrary/psi/psi.go
+          test -f psiphon-ios/psiphon/persianray_policy.go
+          test -f psiphon-ios/vendor/github.com/Psiphon-Labs/quic-go/http3/qpack_compat.go
+          test -f psiphon-ios/vendor/github.com/Psiphon-Labs/quic-go/go.mod
+          test -f usque-ios/go.mod
+          test -f usque-ios/mobile/mobile.go
+          test -f usque_bridge.go
+          MODULE_PATH="$(
+            awk '$1 == "module" { print $2; exit }' \
+              psiphon-ios/vendor/github.com/Psiphon-Labs/quic-go/go.mod |
+              tr -d '\r'
+          )"
+          test "$MODULE_PATH" = "github.com/Psiphon-Labs/quic-go"
+          echo "UNITED=$PWD" >> "$GITHUB_ENV"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.5"
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Fetch URnetwork sources
+        run: |
+          set -euo pipefail
+          perl -pi -e 's/\r$//' fetch-urnetwork.sh
+          chmod +x fetch-urnetwork.sh
+          bash fetch-urnetwork.sh
+
+      - name: Verify Go modules and USQUE adapter
+        run: |
+          set -euo pipefail
+          go mod verify
+          go test github.com/Diniboy1123/usque/mobile github.com/Diniboy1123/usque/api
+
+      - name: Build persianray-core.xcframework
+        run: |
+          set -euo pipefail
+          perl -pi -e 's/\r$//' "$UNITED/MobileLibrary/iOS/build-awg-xray-framework.sh"
+          chmod +x "$UNITED/MobileLibrary/iOS/build-awg-xray-framework.sh"
+          bash "$UNITED/MobileLibrary/iOS/build-awg-xray-framework.sh"
+
+      - name: Verify unified C symbols
+        run: |
+          set -euo pipefail
+          ARCHIVE="build/persianray-core.xcframework/ios-arm64/libpersianraycore.a"
+          test -f "$ARCHIVE"
+          nm -gU "$ARCHIVE" > unified-symbols.txt
+          for symbol in \
+            _AwgStart \
+            _AwgStop \
+            _PRTravelPick \
+            _PRTravelLogTake \
+            _PRTravelFree \
+            _CGoInvoke \
+            _CGoFree \
+            _PRPsiphonStart \
+            _PRPsiphonStop \
+            _PRPsiphonNoticePoll \
+            _PRPsiphonSocksPort \
+            _PRUsqueInvoke \
+            _PRUsqueRegister \
+            _PRUsqueStart \
+            _PRUsqueStop \
+            _PRUsqueStopAll \
+            _PRUsqueStatus \
+            _PRUsqueIsReady \
+            _PRUsqueLastError \
+            _PRUsqueProbe \
+            _PRUsqueFree \
+            _PRUsqueIsStub \
+            _PRUrStart \
+            _PRUrStop \
+            _PRUrFree \
+            _PRUrIsStub; do
+            grep -q "[[:space:]]${symbol}$" unified-symbols.txt || {
+              echo "Missing required symbol: $symbol"
+              exit 1
+            }
+          done
+
+      - name: Upload persianray-core.xcframework
+        uses: actions/upload-artifact@v4
+        with:
+          name: persianray-core.xcframework
+          path: build/persianray-core.xcframework
+          if-no-files-found: error

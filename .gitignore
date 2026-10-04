@@ -1,0 +1,8 @@
+build/
+.staging/
+*.xcframework
+urnetwork/sdk/
+urnetwork/connect/
+urnetwork/glog/
+urnetwork/goidenticons/
+connect-ip-go/

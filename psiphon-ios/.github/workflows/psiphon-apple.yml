@@ -1,0 +1,68 @@
+# Build PsiphonTunnel.xcframework from this fork only.
+# Repo layout: this file lives at .github/workflows/psiphon-apple.yml
+# when `psiphon-ios/` is the GitHub repo root (do not upload persianray-ios).
+name: psiphon-apple
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: psiphon-apple
+  cancel-in-progress: true
+
+jobs:
+  apple:
+    runs-on: macos-15
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      CGO_ENABLED: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Locate sources
+        run: |
+          set -euo pipefail
+          if [ -d MobileLibrary/iOS ]; then
+            echo "SRC=$PWD" >> "$GITHUB_ENV"
+          elif [ -d psiphon-ios/MobileLibrary/iOS ]; then
+            echo "SRC=$PWD/psiphon-ios" >> "$GITHUB_ENV"
+          else
+            echo "Expected MobileLibrary/iOS at repo root (upload the psiphon-ios directory as the repo)."
+            ls -la
+            exit 1
+          fi
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.3"
+
+      - name: Export GOROOT
+        run: echo "GOROOT=$(go env GOROOT)" >> "$GITHUB_ENV"
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build PsiphonTunnel.xcframework
+        run: |
+          set -euo pipefail
+          cd "$SRC/MobileLibrary/iOS"
+          perl -pi -e 's/\r$//' build-psiphon-framework.sh
+          chmod +x build-psiphon-framework.sh
+          bash ./build-psiphon-framework.sh PSIPHON_DISABLE_INPROXY
+
+      - name: Upload PsiphonTunnel.xcframework
+        uses: actions/upload-artifact@v4
+        with:
+          name: PsiphonTunnel.xcframework
+          path: |
+            ${{ env.SRC }}/MobileLibrary/iOS/build/PsiphonTunnel.xcframework
+            ${{ env.SRC }}/MobileLibrary/iOS/build/*.zip
+          if-no-files-found: error

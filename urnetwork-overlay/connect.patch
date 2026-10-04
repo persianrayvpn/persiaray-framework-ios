@@ -1,0 +1,28 @@
+diff --git a/net.go b/net.go
+index 7206f58..257d3c4 100644
+--- a/net.go
++++ b/net.go
+@@ -211,6 +211,9 @@ func (self *ConnectSettings) DialContext(ctx context.Context, network string, ad
+ 	if hook := self.DialNetworkHook; hook != nil {
+ 		hook(network, addr)
+ 	}
++	if conn, used, err := dialViaUpstream(ctx, network, addr); used {
++		return conn, err
++	}
+ 
+ 	var dialContext DialContextFunction
+ 
+diff --git a/transport_family.go b/transport_family.go
+index 9b618b2..87e08ad 100644
+--- a/transport_family.go
++++ b/transport_family.go
+@@ -237,6 +237,9 @@ func NewDirectClientStrategy(ctx context.Context, settings *ClientStrategySettin
+ 		base := direct.ConnectSettings
+ 		base.DialContextSettings = nil
+ 		inner := func(ctx context.Context, network string, addr string) (net.Conn, error) {
++			if conn, used, err := dialViaUpstream(ctx, network, addr); used {
++				return conn, err
++			}
+ 			return base.NetDialer().DialContext(ctx, network, addr)
+ 		}
+ 		var packetConnFactory func(context.Context) (net.PacketConn, error)
