@@ -51,7 +51,11 @@ func (t *awgTunnel) startHop(cfg *socksConfig) error {
 	if cfg.travel() {
 		return t.startTravelHop(cfg)
 	}
-	waitStackReady(t.outerNet, 12*time.Second)
+	// Same gate as Masque Hop: do not attach the inner WireGuard until the
+	// outer session can carry traffic.
+	if !waitStackReady(t.outerNet, 12*time.Second) {
+		return fmt.Errorf("outer hop not ready")
+	}
 	hosts := filterSame24(cfg.hopInnerHosts(), cfg.Endpoint)
 	if len(hosts) == 0 {
 		hosts = []string{"188.114.97.170:2408"}
